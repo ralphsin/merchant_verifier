@@ -1,0 +1,10 @@
+[project]
+name = "merchant-verifier"
+version = "0.1.0"
+description = "An automated system to verify merchant information by cross-referencing Excel data with online sources."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "openpyxl==3.1.2",
+    "pandas==2.2.3",
+]
