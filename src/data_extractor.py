@@ -217,8 +217,6 @@ def _clean_merchant_data(df: pd.DataFrame) -> pd.DataFrame:
 
     # Remove duplicate merchant_id entries (keep first occurrence)
     pre_dedup_count = len(cleaned_df)
-
-    # Perform deduplication
     cleaned_df = cleaned_df.drop_duplicates(subset=["merchant_id"], keep="first")
     post_dedup_count = len(cleaned_df)
 
