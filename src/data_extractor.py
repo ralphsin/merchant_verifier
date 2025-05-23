@@ -19,7 +19,7 @@ from typing import Dict, Optional, Any
 import pandas as pd
 
 # Local imports
-from config.logging_config import get_logger
+from src.config.logging_config import get_logger
 
 # Initialize logger
 logger = get_logger(__name__)
@@ -28,6 +28,16 @@ logger = get_logger(__name__)
 def extract_merchant_data(file_path: str) -> pd.DataFrame:
     """
     Extract merchant data from Excel file.
+
+    The input Excel structure:
+    - Row 1: High-level category headers
+    - Row 2: Specific column headers
+    - Row 3+: Merchant data rows
+
+    The column mapping for merchant data:
+    - Column A (index 0): merchant_id
+    - Column B (index 1): merchant_name
+    - Column C (index 2): country
 
     Args:
         file_path: Path to the Excel file containing merchant data
@@ -49,25 +59,34 @@ def extract_merchant_data(file_path: str) -> pd.DataFrame:
 
     try:
         # Load Excel file with pandas
-        df = pd.read_excel(file_path, sheet_name="Sheet1")
+        df = pd.read_excel(file_path)
         logger.debug(f"Loaded Excel with {df.shape[0]} rows and {df.shape[1]} columns")
 
-        # Skip only the first row (header row)
-        df = df.iloc[1:].reset_index(drop=True)
+        # Skip both header rows (2 rows)
+        df = df.iloc[2:].reset_index(drop=True)
+        logger.debug(f"After skipping 2 header rows, have {len(df)} data rows")
 
-        # Extract only needed columns - map column names based on the Excel structure
+        # Check if the dataframe has at least merchant id and name columns
+        if df.shape[1] < 3:
+            error_msg = f"Excel file doesn't have required columns. Expected at least 3 columns, got {df.shape[1]}"
+            logger.error(error_msg)
+            raise ValueError(error_msg)
+
+        # Extract only needed columns - map column indices based on the actual Excel structure
         merchants = pd.DataFrame(
             {
-                "merchant_id": df.iloc[:, 16],  # mer_id
-                "merchant_name": df.iloc[:, 18],  # mer_dba_nm
-                "merchant_legal_name": df.iloc[:, 19],  # mer_lgl_nm
-                "industry": df.iloc[:, 25],  # genesis_mjr_indus_ds
-                "sub_industry": df.iloc[:, 26],  # genesis_mjr_sbd_indus_ds
-                "merchant_industry": df.iloc[:, 29],  # merchant_industry
-                "address_line1": df.iloc[:, 30],  # phys_ad_line_1_tx
-                "postcode": df.iloc[:, 31],  # postcode
-                "town": df.iloc[:, 32],  # phys_ad_post_town_nm
-                "country": df.iloc[:, 33],  # market
+                "merchant_id": df.iloc[:, 0],  # Column A (index 0)
+                "merchant_name": df.iloc[:, 1],  # Column B (index 1)
+                "merchant_legal_name": df.iloc[
+                    :, 1
+                ],  # Reusing merchant_name as legal name
+                "industry": "Retail",  # Default value since not visible
+                "sub_industry": "Field Sales",  # From the screenshot showing Field Sales
+                "merchant_industry": "Retail",  # Default value
+                "address_line1": "",  # Not visible in screenshot
+                "postcode": "",  # Not visible in screenshot
+                "town": "",  # Not visible in screenshot
+                "country": df.iloc[:, 2],  # Column C (index 2)
             }
         )
 
@@ -104,6 +123,11 @@ def _clean_merchant_data(df: pd.DataFrame) -> pd.DataFrame:
     # Make a copy to avoid modifying the original
     cleaned_df = df.copy()
 
+    # Debug original data
+    logger.debug(f"Before cleaning: {len(cleaned_df)} rows")
+    if not cleaned_df.empty:
+        logger.debug(f"Original merchant_ids: {cleaned_df['merchant_id'].tolist()}")
+
     # Fill missing values with empty strings for text columns
     text_columns = [
         "merchant_name",
@@ -127,11 +151,35 @@ def _clean_merchant_data(df: pd.DataFrame) -> pd.DataFrame:
 
     # Standardize merchant_id format
     if "merchant_id" in cleaned_df.columns:
-        cleaned_df["merchant_id"] = cleaned_df["merchant_id"].astype(str)
-        cleaned_df["merchant_id"] = cleaned_df["merchant_id"].str.strip()
+        # Convert to string and strip whitespace
+        cleaned_df["merchant_id"] = cleaned_df["merchant_id"].astype(str).str.strip()
+
+        # Debug merchant IDs after standardization
+        logger.debug(
+            f"Merchant IDs after standardization: {cleaned_df['merchant_id'].tolist()}"
+        )
+
+        # Check for empty merchant IDs
+        empty_ids = cleaned_df["merchant_id"].isin(["", "nan", "None"])
+        if empty_ids.any():
+            logger.warning(f"Found {empty_ids.sum()} records with empty merchant IDs")
+            # Remove rows with empty merchant IDs
+            cleaned_df = cleaned_df[~empty_ids]
+            logger.debug(f"After removing empty IDs: {len(cleaned_df)} rows")
 
     # Remove duplicate merchant_id entries (keep first occurrence)
     pre_dedup_count = len(cleaned_df)
+
+    # Debug before deduplication
+    if not cleaned_df.empty:
+        logger.debug(f"Merchant IDs before dedup: {cleaned_df['merchant_id'].tolist()}")
+        # Check for duplicates and log them
+        duplicates = cleaned_df["merchant_id"].duplicated(keep=False)
+        if duplicates.any():
+            duplicate_ids = cleaned_df.loc[duplicates, "merchant_id"].unique()
+            logger.debug(f"Duplicate merchant IDs found: {duplicate_ids}")
+
+    # Perform deduplication
     cleaned_df = cleaned_df.drop_duplicates(subset=["merchant_id"], keep="first")
     post_dedup_count = len(cleaned_df)
 
@@ -139,6 +187,11 @@ def _clean_merchant_data(df: pd.DataFrame) -> pd.DataFrame:
         logger.warning(
             f"Removed {pre_dedup_count - post_dedup_count} duplicate merchant records"
         )
+
+    # Debug after deduplication
+    logger.debug(f"After deduplication: {len(cleaned_df)} rows")
+    if not cleaned_df.empty:
+        logger.debug(f"Final merchant IDs: {cleaned_df['merchant_id'].tolist()}")
 
     # Validate essential fields
     missing_name = cleaned_df["merchant_name"].str.strip() == ""

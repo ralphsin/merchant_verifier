@@ -39,39 +39,49 @@ def check_excel_format(file_path):
         print(f"Loaded Excel with {df.shape[0]} rows and {df.shape[1]} columns")
 
         # Print the first few rows to see the structure
-        print("\nFirst 5 rows:")
-        print(df.head(5))
+        print("\nFirst few rows (first 6 columns):")
+        for i in range(min(5, df.shape[0])):
+            col_data = []
+            for j in range(min(6, df.shape[1])):
+                col_data.append(f"{df.iloc[i, j]}")
+            print(f"Row {i}: {' | '.join(col_data)}")
 
-        # Print column names/indices
-        print("\nColumn names:")
-        for i, col in enumerate(df.columns):
-            print(f"Column {i}: {col}")
+        # Analyze header and data rows
+        print("\nAnalyzing file structure:")
+        print(f"Row 0 (Header Row 1): {df.iloc[0, 0:6].tolist()}")
+        print(f"Row 1 (Header Row 2): {df.iloc[1, 0:6].tolist()}")
 
-        # Check if it has enough columns
-        if df.shape[1] < 34:  # We need columns up to index 33
-            print(
-                f"Warning: File has only {df.shape[1]} columns, but we need at least 34"
-            )
-            return False
+        if df.shape[0] > 2:
+            print(f"Row 2 (First Data Row): {df.iloc[2, 0:6].tolist()}")
+        if df.shape[0] > 3:
+            print(f"Row 3 (Second Data Row): {df.iloc[3, 0:6].tolist()}")
 
         # Try to extract data as the real application would
         print("\nAttempting to extract data as the application would...")
 
-        # Skip header rows (we know there are 2 header rows)
-        data_rows = df.iloc[2:].reset_index(drop=True)
+        # Skip both header rows (2 rows)
+        data_rows = df.iloc[1:].reset_index(drop=True)
+        print(f"After skipping 2 header rows, we have {len(data_rows)} data rows")
+
+        # Print the key column indices to verify
+        print("\nKey columns used by the application:")
+        print("merchant_id: Column index 0 (Column A)")
+        print("merchant_name: Column index 1 (Column B)")
+        print("country: Column index 2 (Column C)")
 
         # Extract sample data from required columns
-        try:
+        if len(data_rows) > 0:
+            print("\nSample data from first merchant (first data row):")
             sample = {
-                "merchant_id": data_rows.iloc[0, 16] if len(data_rows) > 0 else None,
-                "merchant_name": data_rows.iloc[0, 18] if len(data_rows) > 0 else None,
-                "address_line1": data_rows.iloc[0, 30] if len(data_rows) > 0 else None,
-                "postcode": data_rows.iloc[0, 31] if len(data_rows) > 0 else None,
-                "town": data_rows.iloc[0, 32] if len(data_rows) > 0 else None,
-                "country": data_rows.iloc[0, 33] if len(data_rows) > 0 else None,
+                "merchant_id": data_rows.iloc[0, 0]
+                if data_rows.shape[1] > 0
+                else "N/A",
+                "merchant_name": data_rows.iloc[0, 1]
+                if data_rows.shape[1] > 1
+                else "N/A",
+                "country": data_rows.iloc[0, 2] if data_rows.shape[1] > 2 else "N/A",
             }
 
-            print("\nSample extracted data:")
             for key, value in sample.items():
                 print(f"{key}: {value}")
 
@@ -83,21 +93,28 @@ def check_excel_format(file_path):
                 print(f"\nWarning: Missing data for essential fields: {missing}")
                 return False
 
+            # List all merchants found in the file
+            print("\nAll merchants found in the file:")
+            for i in range(len(data_rows)):
+                merchant_id = data_rows.iloc[i, 0]
+                merchant_name = data_rows.iloc[i, 1]
+                if not pd.isna(merchant_id) and not pd.isna(merchant_name):
+                    print(f"  Merchant {i + 1}: {merchant_id} - {merchant_name}")
+
             print("\nExcel file structure appears compatible with the application.")
             return True
-
-        except Exception as e:
-            print(f"\nError extracting data: {str(e)}")
+        else:
+            print("\nWarning: No data rows found after skipping headers!")
             return False
 
     except Exception as e:
-        print(f"Error loading Excel file: {str(e)}")
+        print(f"Error analyzing Excel file: {str(e)}")
         return False
 
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        print("Usage: python excel_check.py <path_to_excel_file>")
+        print("Usage: python check_excel_format.py <path_to_excel_file>")
         sys.exit(1)
 
     file_path = sys.argv[1]

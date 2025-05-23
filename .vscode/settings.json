@@ -23,6 +23,7 @@
     "pypa",
     "pypackages",
     "pyrightconfig",
+    "pythonpath",
     "pytype",
     "ropeproject",
     "scrapy",
@@ -31,6 +32,7 @@
     "Spyder",
     "spyderproject",
     "spyproject",
+    "testpaths",
     "venv",
     "webassets"
   ]
